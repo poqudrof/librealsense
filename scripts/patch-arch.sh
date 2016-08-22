@@ -6,19 +6,17 @@ SRC_VERSION_NAME=linux
 ## http://stackoverflow.com/questions/9293887/in-bash-how-do-i-convert-a-space-delimited-string-into-an-array
 
 FULL_NAME=$( uname -r | tr "-" "\n")
-read -a VERSION <<< $LINUX
+read -a VERSION <<< $FULL_NAME
 
 SRC_VERSION_ID=${VERSION[0]}  ## e.g. : 4.5.6
 SRC_VERSION_REL=${VERSION[1]} ## e.g. : 1
 LINUX_TYPE=${VERSION[2]}      ## e.g. : ARCH
 
-ARCH=x86_64
-
 LINUX_BRANCH=archlinux-$SRC_VERSION_ID
-
-# ARCH --  KERNEL_NAME=linux-$SRC_VERSION_ID-$SRC_VERSION_REL-$ARCH.pkg.tar.xz
 KERNEL_NAME=linux-$SRC_VERSION_ID
 PATCH_NAME=patch-$SRC_VERSION_ID
+
+# ARCH Linux --  KERNEL_NAME=linux-$SRC_VERSION_ID-$SRC_VERSION_REL-$ARCH.pkg.tar.xz
 
 mkdir kernel
 cd kernel
@@ -50,8 +48,8 @@ patch -p1 < ../../realsense-camera-formats.patch
 ## Get the config
 # zcat /proc/config.gz > .config  ## Not the good one ?
 
-cp /usr/lib/modules/$FULL_NAME/build/.config .
-cp /usr/lib/modules/$FULL_NAME/build/Module.symvers .
+cp /usr/lib/modules/`uname -r`/build/.config .
+cp /usr/lib/modules/`uname -r`/build/Module.symvers .
 
 echo "Prepare the build"
 
@@ -76,21 +74,43 @@ echo "Unloading existing uvcvideo driver..."
 sudo modprobe -r uvcvideo
 
 cd ..
-xz -k uvcvideo.ko
 
 ## Not sure yet about deleting and copying...
 
 # save the existing module
-sudo cp /lib/modules/$LINUX_BRANCH/kernel/drivers/media/usb/uvc/uvcvideo.ko.backup
-sudo cp /lib/modules/$LINUX_BRANCH/kernel/drivers/media/usb/uvc/uvcvideo.ko.xz.backup
 
-# Delete existing module
-sudo rm /lib/modules/$LINUX_BRANCH/kernel/drivers/media/usb/uvc/uvcvideo.ko
-sudo rm /lib/modules/$LINUX_BRANCH/kernel/drivers/media/usb/uvc/uvcvideo.ko.xz
+MODULE_NAME=/lib/modules/`uname -r`/kernel/drivers/media/usb/uvc/uvcvideo.ko
+
+if [ -e $MODULE_NAME ]; then
+    sudo cp $MODULE_NAME $MODULE_NAME.backup
+    sudo rm $MODULE_NAME
+
+    sudo cp uvcvideo.ko $MODULE_NAME
+fi
+
+if [ -e $MODULE_NAME.xz ]; then
+    sudo cp $MODULE_NAME.xz $MODULE_NAME.xz.backup
+    sudo rm $MODULE_NAME.xz
+
+    # compress
+    xz uvcvideo.ko
+    sudo cp uvcvideo.ko.xz $MODULE_NAME
+fi
+
+if [ -e $MODULE_NAME.gz ]; then
+    sudo cp $MODULE_NAME.gz $MODULE_NAME.gz.backup
+    sudo rm $MODULE_NAME.gz
+
+    # compress
+    gzip uvcvideo.ko
+    sudo cp uvcvideo.ko.gz $MODULE_NAME.gz
+fi
 
 # Copy out to module directory
-sudo cp uvcvideo.ko.xz /lib/modules/$LINUX_BRANCH/kernel/drivers/media/usb/uvc/
+
 
 sudo modprobe uvcvideo
+
+rm -rf kernel
 
 echo "Script has completed. Please consult the installation guide for further instruction."
